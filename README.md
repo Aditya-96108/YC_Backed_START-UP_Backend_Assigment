@@ -1,10 +1,5 @@
 # YC_Backed_START-UP_Backend_Assigment
 ```
-VectorShift Integrations Technical Assessment - Submission Guide
-=============================================================
-
-Hi VectorShift Team,
-
 I'm Aditya Bidve, and I'm excited to submit my completed Integrations Technical Assessment. This guide explains how data flows between the frontend and backend, provides simple steps to test the HubSpot integration, and details how to run both components. I tested everything with my own HubSpot credentials, which I've removed for security, and included placeholders in the code for you to insert your credentials. The backend README.txt (in /backend) provides additional setup details. Below, I've written this in a clear, step-by-step way to make testing straightforward.
 
 ---
