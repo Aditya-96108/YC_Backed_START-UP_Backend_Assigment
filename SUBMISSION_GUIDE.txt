@@ -1,0 +1,178 @@
+```
+VectorShift Integrations Technical Assessment - Submission Guide
+=============================================================
+
+Hi VectorShift Team,
+
+I'm Aditya Bidve, and I'm excited to submit my completed Integrations Technical Assessment. This guide explains how data flows between the frontend and backend, provides simple steps to test the HubSpot integration, and details how to run both components. I tested everything with my own HubSpot credentials, which I've removed for security, and included placeholders in the code for you to insert your credentials. The backend README.txt (in /backend) provides additional setup details. Below, I've written this in a clear, step-by-step way to make testing straightforward.
+
+---
+
+1. Data Flow: Frontend to Backend
+--------------------------------
+The application uses a React frontend (running on http://localhost:3000) and a Python/FastAPI backend (running on http://localhost:8000) to handle the HubSpot OAuth integration. Here's how data moves for the HubSpot integration, mirroring the Airtable and Notion flows:
+
+- Step 1: Select Integration
+  - In the frontend UI (/frontend/src/integration-form.js), I select "HubSpot" from a dropdown, which renders the HubSpotIntegration component (/frontend/src/integrations/hubspot.js).
+  - I enter a user ID (e.g., "TestUser") and organization ID (e.g., "TestOrg").
+
+- Step 2: Initiate OAuth
+  - Clicking "Connect to HubSpot" in the UI triggers a POST request to the backend's /integrations/hubspot/authorize endpoint (defined in /backend/integrations/hubspot.py).
+  - The frontend sends user_id and org_id (e.g., "TestUser", "TestOrg") in a FormData payload.
+  - The backend generates an OAuth authorization URL using the HubSpot CLIENT_ID and CLIENT_SECRET (from hubspot.py) and stores a state in Redis for security.
+  - The backend returns the auth_url, which the frontend opens in a popup window.
+
+- Step 3: Authenticate
+  - In the popup, I log into HubSpot and authorize the app, which redirects to the backend's /integrations/hubspot/oauth2callback endpoint.
+  - The backend validates the state, exchanges the authorization code for an access token, and stores the credentials in Redis (with a 600-second expiry).
+  - The callback returns an HTML page that closes the popup.
+
+- Step 4: Retrieve Credentials
+  - The frontend polls until the popup closes, then sends a POST request to /integrations/hubspot/credentials with user_id and org_id.
+  - The backend retrieves the credentials from Redis and returns them to the frontend.
+  - The frontend updates its state to show "HubSpot Connected" and stores the credentials in integrationParams.
+
+- Step 5: Load Items
+  - With credentials available, the frontend's DataForm component (/frontend/src/data-form.js) displays a "Load Data" button.
+  - Clicking it sends a POST request to /integrations/hubspot/load with the credentials.
+  - The backend uses the access token to query HubSpot's CRM contacts API, maps the response to IntegrationItem objects (defined in /backend/integrations/integration_item.py), and prints them to the console (as suggested).
+  - The backend returns the items to the frontend, which displays them in a text field and logs them to the console for verification.
+
+This flow ensures secure OAuth authentication and seamless data retrieval, with CORS configured for frontend-backend communication.
+
+---
+
+2. Running the Application
+--------------------------
+To run the application, you'll need to set up both the backend and frontend. I've included detailed steps below, and the backend README.txt (/backend/README.txt) provides additional context.
+
+### Backend Setup
+1. Navigate to the backend directory:
+```
+
+cd backend
+
+```
+
+2. Set up a Python virtual environment and install dependencies:
+```
+
+python -m venv venv .\\venv\\Scripts\\activate # Windows source venv/bin/activate # macOS/Linux pip install fastapi httpx requests redis kombu uvicorn
+
+```
+
+3. Start a Redis instance (required for storing OAuth states and credentials):
+- Using Docker (recommended):
+  ```
+  docker run -d -p 6379:6379 --name redis redis
+  ```
+- Or locally (e.g., on macOS):
+  ```
+  brew install redis
+  redis-server
+  ```
+- Verify Redis is running:
+  ```
+  docker exec redis redis-cli ping  # Docker, should return PONG
+  redis-cli ping                   # Local, should return PONG
+  ```
+
+4. Insert your HubSpot credentials:
+- Open /backend/integrations/hubspot.py and replace the placeholders:
+  ```
+  CLIENT_ID = "your_hubspot_client_id"  # Insert your HubSpot Client ID
+  CLIENT_SECRET = "your_hubspot_client_secret"  # Insert your HubSpot Client Secret
+  ```
+- Airtable and Notion credentials are optional (see /backend/integrations/airtable.py, /backend/integrations/notion.py).
+
+5. Start the backend server:
+```
+
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+
+```
+- The server runs on http://localhost:8000. You can access Swagger UI at http://localhost:8000/docs for testing.
+
+### Frontend Setup
+1. Navigate to the frontend directory:
+```
+
+cd frontend
+
+```
+
+2. Install Node.js dependencies:
+```
+
+npm install
+
+```
+- This installs React, Material-UI, Axios, and other dependencies (defined in /frontend/package.json).
+
+3. Start the frontend server:
+```
+
+npm start
+
+```
+- The app runs on http://localhost:3000 and opens automatically in your browser.
+
+### Verify Setup
+- Test the backend root endpoint:
+```
+
+curl http://localhost:8000/
+
+```
+- Expected response: {"Ping":"Pong"}
+- Ensure the frontend loads at http://localhost:3000, showing a form with "User", "Organization", and "Integration Type" fields.
+
+---
+
+3. Testing the HubSpot OAuth Integration
+---------------------------------------
+Here's a simple way to test the HubSpot integration using the UI, ensuring the OAuth flow and item loading work as expected.
+
+1. Open the frontend at http://localhost:3000.
+2. In the form:
+ - Enter "User": TestUser
+ - Enter "Organization": TestOrg
+ - Select "HubSpot" from the "Integration Type" dropdown.
+3. Click "Connect to HubSpot":
+ - A popup opens with HubSpot's login page.
+ - Log in with your HubSpot account and authorize the app.
+ - The popup closes automatically after authorization.
+ - The button changes to "HubSpot Connected" (green).
+4. Click "Load Data":
+ - The backend fetches HubSpot contacts, prints them to the backend console, and returns them to the frontend.
+ - The contacts appear in the text field below "Load Data" and are logged to the browser's console (F12 > Console).
+5. Verify the output:
+ - Backend console shows IntegrationItem objects (e.g., id, name, type="Contact").
+ - Frontend text field shows JSON-formatted items (e.g., [{"id":"123","name":"John Doe","type":"Contact"},...]).
+ - Browser console shows the same items.
+
+You can also test via Swagger UI (http://localhost:8000/docs):
+- Use the /integrations/hubspot/authorize endpoint with user_id="TestUser", org_id="TestOrg".
+- Open the returned auth_url in a browser.
+- After authorization, use /integrations/hubspot/credentials to get credentials.
+- Use /integrations/hubspot/load with the credentials to fetch items.
+
+---
+
+4. Notes
+--------
+- I implemented the HubSpot integration for both backend (/backend/integrations/hubspot.py) and frontend (/frontend/src/integrations/hubspot.js), per the assessment requirements.
+- The frontend mirrors Airtable and Notion integrations for consistency, with HubSpot added to the dropdown (/frontend/src/integration-form.js) and load functionality (/frontend/src/data-form.js).
+- I fixed a bug in /backend/integrations/notion.py (get_items_notion return issue) and enhanced comments across all files.
+- I tested the HubSpot integration with my own credentials, removed for security, and provided placeholders in hubspot.py.
+- The backend README.txt details credential insertion and setup for reference.
+- For issues, check:
+- Redis is running (localhost:6379).
+- Port 8000 (backend) and 3000 (frontend) are free.
+- Valid HubSpot credentials are in hubspot.py.
+
+Thank you for reviewing my submission! I enjoyed working on this assessment and look forward to discussing it further. 
+
+Best regards,
+Aditya Bidve
+```
